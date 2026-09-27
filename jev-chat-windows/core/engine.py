@@ -58,10 +58,19 @@ def analyze(messages: list, relationship: str, model: str | None = None,
     except JevError:
         pass  # 退回盲起草 + 老的一次合问；错误不打日志（里面可能带请求内容）
 
+    # 置信度闸门：本地 Laya 基础模型零样本下部分题乱答（None/低置信），
+    # 没把握的判断喂给起草只会带偏口吻——只保留有把握的条目当小抄。
+    CONF_GATE = 0.60
+    safe_answers = {
+        k: v for k, v in answers.items()
+        if isinstance(v, dict)
+        and (v.get("choice") is not None or isinstance(v.get("score"), (int, float)))
+        and (v.get("confidence") or 0) >= CONF_GATE
+    }
     candidates = draft_candidates(messages, relationship, provider=provider, model=model,
                                   base_url=base_url, timeout=timeout, keep=context,
                                   reply_to=reply_to, style=style, thinking=thinking,
-                                  guidance=guidance_text(answers) if judged else None)
+                                  guidance=guidance_text(safe_answers) if safe_answers else None)
     if not candidates:  # 注入过滤可以把起草结果全扔掉；接着取 [0] 会 IndexError
         raise JevError("起草结果没有可用候选回复")
 
