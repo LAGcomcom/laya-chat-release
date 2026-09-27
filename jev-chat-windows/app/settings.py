@@ -48,7 +48,7 @@ def style() -> str:
     return str(_read("style") or "")
 
 def jev_provider() -> str:
-    """判断模型走哪家：openrouter（默认）或 typesafe 直连。"""
+    """判断模型走哪家（精简版固定为本地 Laya）。"""
     v = _read("jev_provider")
     return v if v in JEV_PROVIDERS else _DEFAULT_JEV
 
@@ -57,7 +57,7 @@ def jev_model() -> str:
     return str(_read("jev_model") or "") or JEV_PROVIDERS[jev_provider()].default
 
 def draft_provider() -> str:
-    """起草走哪家（见 core/providers.DRAFT_PROVIDERS）。老配置里的 openrouter/deepseek 照样认。"""
+    """起草走哪家（精简版固定为商汤 SenseNova）。"""
     v = _read("draft_provider")
     return v if v in DRAFT_PROVIDERS else _DEFAULT_DRAFT
 
@@ -77,7 +77,7 @@ def reply_target() -> bool:
     return bool(_read("reply_target", False))
 
 def thinking() -> bool:
-    """起草时是否开思考模式：慢且贵，默认关。只有 DeepSeek / OpenRouter / Anthropic / Gemini 吃它。"""
+    """起草时是否开思考模式：慢且贵，默认关。"""
     return bool(_read("thinking", False))
 
 def check_update() -> bool:
