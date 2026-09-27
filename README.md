@@ -13,7 +13,7 @@
 - Windows 10 1903+ / 11
 - NVIDIA 显卡（GTX 1060+，无 N 卡自动退回 CPU 模式，速度变慢）
 - 磁盘空间约 8GB（PyTorch ~2.5GB + 模型 ~3.5GB）
-- 一个 OpenAI 兼容 API key（商汤 SenseNova / DeepSeek 官方均可，安装时填一次）
+- 一个商汤 SenseNova API key（安装向导里填一次；注册：https://token.sensenova.cn）
 
 ## 文件说明
 

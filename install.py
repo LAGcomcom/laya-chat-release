@@ -46,12 +46,29 @@ def run(cmd: list, env: dict | None = None, on_line=None, check: bool = True) ->
     if env:
         e.update(env)
     p = subprocess.Popen(cmd, env=e, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-                         text=True, encoding="utf-8", errors="replace", bufsize=1)
+                         bufsize=1)
     assert p.stdout
-    for line in p.stdout:
-        line = line.rstrip()
-        if line and on_line:
-            on_line(line)
+
+    def emit(raw: bytes) -> None:
+        line = raw.decode("utf-8", errors="replace").rstrip()
+        # \r 刷新型进度行（pip/hf 的 tqdm）：只保留最后一次刷新，防日志刷屏
+        for seg in line.split("\r"):
+            seg = seg.strip()
+            if seg and on_line:
+                on_line(seg[-240:])
+
+    buf = b""
+    assert p.stdout
+    while True:
+        ch = p.stdout.read(1)
+        if not ch:
+            break
+        buf += ch
+        if ch in (b"\n", b"\r"):
+            emit(buf)
+            buf = b""
+    if buf:
+        emit(buf)
     p.wait()
     if check and p.returncode != 0:
         raise RuntimeError(f"命令失败({' '.join(map(str, cmd))})，见日志")
@@ -61,9 +78,10 @@ def run(cmd: list, env: dict | None = None, on_line=None, check: bool = True) ->
 # ---------------- installer steps (run in worker thread) ----------------
 
 class Installer:
-    def __init__(self, ui_log, ui_step):
+    def __init__(self, ui_log, ui_step, put):
         self.log = ui_log          # fn(str line)
         self.step_ui = ui_step     # fn(index, state)  state in run/done/error
+        self.put = put             # fn(item tuple) -> 主线程事件队列
 
     def step_env(self):
         if PY.exists():
@@ -71,8 +89,8 @@ class Installer:
             return
         venv.create(VENV, with_pip=True)
         self.log("虚拟环境创建完成")
-        run([PY, "-m", "pip", "install", "--quiet", "--upgrade", "pip",
-             "-i", PYPI_MIRROR], on_line=self.log)
+        run([PY, "-m", "pip", "install", "--upgrade", "pip",
+             "-i", PYPI_MIRROR, "--progress-bar", "off"], on_line=self.log)
 
     def step_torch(self):
         try:
@@ -83,23 +101,23 @@ class Installer:
         if r == 0:
             self.log("CUDA 版 torch 已安装，跳过")
             return
-        run([PY, "-m", "pip", "install", "--quiet", "torch",
-             "--index-url", TORCH_INDEX], on_line=self.log)
+        run([PY, "-m", "pip", "install", "torch",
+             "--index-url", TORCH_INDEX, "--progress-bar", "off"], on_line=self.log)
         r = run([PY, "-c", "import torch; assert torch.cuda.is_available()"],
                 on_line=self.log, check=False)
         if r != 0:
             self.log("[警告] CUDA 不可用（无 N 卡或驱动旧），退回 CPU 版")
-            run([PY, "-m", "pip", "install", "--quiet", "torch", "-i", PYPI_MIRROR,
-                 "--force-reinstall"], on_line=self.log)
+            run([PY, "-m", "pip", "install", "torch", "-i", PYPI_MIRROR,
+                 "--force-reinstall", "--progress-bar", "off"], on_line=self.log)
 
     def step_deps(self):
         req = [ln.strip() for ln in (PROJ / "requirements.txt")
                .read_text(encoding="utf-8").splitlines()
                if ln.strip() and not ln.strip().startswith("#")]
-        run([PY, "-m", "pip", "install", "--quiet", *req, "-i", PYPI_MIRROR],
+        run([PY, "-m", "pip", "install", *req, "-i", PYPI_MIRROR, "--progress-bar", "off"],
             on_line=self.log)
-        run([PY, "-m", "pip", "install", "--quiet", "numpy", "fastapi",
-             "uvicorn[standard]", "openai", "laya", "-i", PYPI_MIRROR],
+        run([PY, "-m", "pip", "install", "numpy", "fastapi",
+             "uvicorn[standard]", "openai", "laya", "-i", PYPI_MIRROR, "--progress-bar", "off"],
             on_line=self.log)
 
     def step_models(self):
@@ -114,8 +132,12 @@ class Installer:
         if os.environ.get("LLM_API_KEY", "").strip() or cfg.get("_key_saved"):
             self.log("API key 已配置，跳过")
             return
-        # 在主线程弹对话框拿 key（由 pipeline 通过事件队列请求）
-        ans = KEY_ASKER["fn"]()
+        # tkinter 非线程安全：请求主线程弹窗，本线程阻塞等结果
+        ev = threading.Event()
+        holder: dict = {}
+        self.put(("ask_key", ev, holder))
+        ev.wait(timeout=600)
+        ans = holder.get("result")
         if not ans:
             raise RuntimeError("未填写 API 密钥，安装中止")
         base, model, key = ans
@@ -143,10 +165,6 @@ class Installer:
 PIPELINE = [("step_env", STEPS[0]), ("step_torch", STEPS[1]), ("step_deps", STEPS[2]),
             ("step_models", STEPS[3]), ("step_key", STEPS[4]),
             ("step_startscript", STEPS[5])]
-
-# 主线程往这里塞"问 key"的函数，worker 线程调用
-KEY_ASKER = {"fn": lambda: None}
-
 
 # ---------------- GUI ----------------
 
@@ -231,10 +249,8 @@ def gui() -> None:
         box.wait_window()
         return result[0] if result else None
 
-    KEY_ASKER["fn"] = ask_key_dialog
-
     def worker():
-        inst = Installer(ui_log, ui_step)
+        inst = Installer(ui_log, ui_step, q.put)
         ok = True
         for i, (fname, _) in enumerate(PIPELINE):
             ui_step(i, "run")
@@ -276,6 +292,10 @@ def gui() -> None:
                     prog.configure(value=item[1])
                 elif item[0] == "phase":
                     phase.configure(text=item[1])
+                elif item[0] == "ask_key":
+                    _, ev, holder = item
+                    holder["result"] = ask_key_dialog()
+                    ev.set()
                 elif item[0] == "done":
                     btn.configure(text="完成 ✔", state="disabled",
                                   bg="#1a6f4b")
@@ -290,18 +310,24 @@ def gui() -> None:
 if __name__ == "__main__":
     if "--cli" in sys.argv:
         inst = Installer(lambda s: print(s, flush=True),
-                         lambda i, s: print(f"  [{s}] {STEPS[i]}", flush=True))
+                         lambda i, s: print(f"  [{s}] {STEPS[i]}", flush=True),
+                         put=lambda item: None)
         try:
             for fname, label in PIPELINE:
                 print(f"== {label}", flush=True)
                 if fname == "step_key":
                     b = (input("接口地址 [https://token.sensenova.cn/v1]: ").strip()
                          or "https://token.sensenova.cn/v1")
-                    m = input("模型名 [glm-5.2]: ").strip() or "glm-5.2"
+                    m = input("模型名 [deepseek-v4-flash]: ").strip() or "deepseek-v4-flash"
                     k = input("API 密钥: ").strip()
                     if not k:
                         raise RuntimeError("未填写密钥")
-                    KEY_ASKER["fn"] = (lambda bb, mm, kk: lambda: (bb, mm, kk))(b, m, k)
+
+                    def put(item, _ans=(b, m, k)):
+                        _, ev, holder = item
+                        holder["result"] = _ans
+                        ev.set()
+                    inst.put = put
                 getattr(inst, fname)()
             print("全部完成！双击 start.bat 启动。")
         except Exception as exc:
