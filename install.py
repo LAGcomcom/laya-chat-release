@@ -28,6 +28,7 @@ VENV = ROOT / ".venv"
 PY = VENV / "Scripts" / "python.exe"
 PROJ = ROOT / "jev-chat-windows"
 TORCH_INDEX = "https://download.pytorch.org/whl/cu121"
+ALIYUN_TORCH = "https://mirrors.aliyun.com/pytorch-wheels/cu121/"
 PYPI_MIRROR = "https://pypi.tuna.tsinghua.edu.cn/simple"
 LAYER_PORT = "8199"
 
@@ -101,8 +102,17 @@ class Installer:
         if r == 0:
             self.log("CUDA 版 torch 已安装，跳过")
             return
-        run([PY, "-m", "pip", "install", "torch",
-             "--index-url", TORCH_INDEX, "--progress-bar", "off"], on_line=self.log)
+        # 阿里云镜像优先（国内快），官方源兜底
+        run([PY, "-m", "pip", "install", "torch==2.5.1+cu121",
+             "-f", ALIYUN_TORCH, "-i", PYPI_MIRROR,
+             "--progress-bar", "off"], on_line=self.log, check=False)
+        r = run([PY, "-c", "import torch; assert torch.cuda.is_available()"],
+                on_line=self.log, check=False)
+        if r != 0:
+            self.log("阿里云镜像未装上，改走 PyTorch 官方源...")
+            run([PY, "-m", "pip", "install", "torch",
+                 "--index-url", TORCH_INDEX, "--progress-bar", "off"],
+                on_line=self.log, check=False)
         r = run([PY, "-c", "import torch; assert torch.cuda.is_available()"],
                 on_line=self.log, check=False)
         if r != 0:
