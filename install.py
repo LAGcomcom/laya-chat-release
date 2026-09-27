@@ -53,10 +53,9 @@ def run(cmd: list, env: dict | None = None, on_line=None, check: bool = True) ->
     def emit(raw: bytes) -> None:
         line = raw.decode("utf-8", errors="replace").rstrip()
         # \r 刷新型进度行（pip/hf 的 tqdm）：只保留最后一次刷新，防日志刷屏
-        for seg in line.split("\r"):
-            seg = seg.strip()
-            if seg and on_line:
-                on_line(seg[-240:])
+        segs = [x.strip() for x in line.split("\r") if x.strip()]
+        if segs and on_line:
+            on_line(segs[-1][-240:])
 
     buf = b""
     assert p.stdout
@@ -91,7 +90,7 @@ class Installer:
         venv.create(VENV, with_pip=True)
         self.log("虚拟环境创建完成")
         run([PY, "-m", "pip", "install", "--upgrade", "pip",
-             "-i", PYPI_MIRROR, "--progress-bar", "off"], on_line=self.log)
+             "-i", PYPI_MIRROR], on_line=self.log)
 
     def step_torch(self):
         try:
@@ -104,30 +103,29 @@ class Installer:
             return
         # 阿里云镜像优先（国内快），官方源兜底
         run([PY, "-m", "pip", "install", "torch==2.5.1+cu121",
-             "-f", ALIYUN_TORCH, "-i", PYPI_MIRROR,
-             "--progress-bar", "off"], on_line=self.log, check=False)
+             "-f", ALIYUN_TORCH, "-i", PYPI_MIRROR], on_line=self.log, check=False)
         r = run([PY, "-c", "import torch; assert torch.cuda.is_available()"],
                 on_line=self.log, check=False)
         if r != 0:
             self.log("阿里云镜像未装上，改走 PyTorch 官方源...")
             run([PY, "-m", "pip", "install", "torch",
-                 "--index-url", TORCH_INDEX, "--progress-bar", "off"],
+                 "--index-url", TORCH_INDEX],
                 on_line=self.log, check=False)
         r = run([PY, "-c", "import torch; assert torch.cuda.is_available()"],
                 on_line=self.log, check=False)
         if r != 0:
             self.log("[警告] CUDA 不可用（无 N 卡或驱动旧），退回 CPU 版")
             run([PY, "-m", "pip", "install", "torch", "-i", PYPI_MIRROR,
-                 "--force-reinstall", "--progress-bar", "off"], on_line=self.log)
+                 "--force-reinstall"], on_line=self.log)
 
     def step_deps(self):
         req = [ln.strip() for ln in (PROJ / "requirements.txt")
                .read_text(encoding="utf-8").splitlines()
                if ln.strip() and not ln.strip().startswith("#")]
-        run([PY, "-m", "pip", "install", *req, "-i", PYPI_MIRROR, "--progress-bar", "off"],
+        run([PY, "-m", "pip", "install", *req, "-i", PYPI_MIRROR],
             on_line=self.log)
         run([PY, "-m", "pip", "install", "numpy", "fastapi",
-             "uvicorn[standard]", "openai", "laya", "-i", PYPI_MIRROR, "--progress-bar", "off"],
+             "uvicorn[standard]", "openai", "laya", "-i", PYPI_MIRROR],
             on_line=self.log)
 
     def step_models(self):
