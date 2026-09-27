@@ -19,8 +19,8 @@ _ROOT = (os.path.dirname(sys.executable) if getattr(sys, "frozen", False)
 _CONFIG = os.path.join(_ROOT, "config.json")
 _DEFAULT_RELATIONSHIP = "romantic partners"
 _DEFAULT_CONTEXT = 10
-_DEFAULT_JEV = "openrouter"
-_DEFAULT_DRAFT = "deepseek"
+_DEFAULT_JEV = "laya"
+_DEFAULT_DRAFT = "sensenova"
 
 
 def _read(name: str, default=None):

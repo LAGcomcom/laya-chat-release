@@ -25,10 +25,9 @@ LLM_ENV = "LLM_API_KEY"    # 起草那把，不管选哪家语言模型
 LEGACY = {JEV_ENV: "OPENROUTER_API_KEY", LLM_ENV: "DEEPSEEK_API_KEY"}
 
 _Jev = namedtuple("_Jev", "name default")
+# 精简版：判断只走本地 Laya（Jev 兼容协议，免密钥）
 JEV_PROVIDERS = {
     "laya": _Jev("Laya 本地 (免key)", "laya-local"),
-    "openrouter": _Jev("OpenRouter", "typesafe/jev-1.13"),
-    "typesafe": _Jev("TypeSafe 直连", "jev-latest"),
 }
 
 # protocol ∈ {openai, anthropic, gemini}：决定 core/llm.py 用哪个官方 SDK
@@ -47,57 +46,28 @@ _OPENCODE_HEADERS = {
 # /v1/models 还混着走 /messages、/responses 的模型，那些用 chat/completions 会失败
 _OPENCODE_CHAT = ("deepseek-", "glm-", "kimi-", "mimo-", "longcat-", "hy", "space-bunny-")
 _opencode_chat = lambda model_id: model_id.startswith(_OPENCODE_CHAT)  # noqa: E731
-DRAFT_PROVIDERS = {  # 第一个就是默认：DeepSeek 官网直连
-    "deepseek": _Draft("DeepSeek 官网", "openai", "https://api.deepseek.com", "deepseek-flash",
-                       lambda on: {"thinking": {"type": "enabled" if on else "disabled"}}),
-    "openrouter": _Draft("OpenRouter", "openai", OPENROUTER_BASE,
-                         "deepseek/deepseek-v4.1-flash", lambda on: {"reasoning": {"enabled": on}}),
-    "openai": _Draft("OpenAI", "openai", "https://api.openai.com/v1", "", _NONE),
-    "moonshot": _Draft("Moonshot (Kimi)", "openai", "https://api.moonshot.cn/v1", "", _NONE),
-    "zhipu": _Draft("智谱 GLM", "openai", "https://open.bigmodel.cn/api/paas/v4", "", _NONE),
-    "dashscope": _Draft("通义千问", "openai",
-                        "https://dashscope.aliyuncs.com/compatible-mode/v1", "", _NONE),
-    "siliconflow": _Draft("硅基流动", "openai", "https://api.siliconflow.cn/v1", "", _NONE),
-    "opencode": _Draft("OpenCode Go", "openai", "https://opencode.ai/zen/go/v1",
-                       "deepseek-v4.1-flash", _NONE, _OPENCODE_HEADERS, _opencode_chat),
-    "anthropic": _Draft("Anthropic", "anthropic", "https://api.anthropic.com", "", _NONE),
-    "gemini": _Draft("Google Gemini", "gemini", "", "", _NONE),
-    "sensenova": _Draft("商汤 SenseNova (GLM)", "openai", "https://token.sensenova.cn/v1",
-                        "glm-5.2",
+DRAFT_PROVIDERS = {  # 精简版：起草只走商汤网关（key 用户自备）
+    "sensenova": _Draft("商汤 SenseNova", "openai", "https://token.sensenova.cn/v1",
+                        "deepseek-v4-flash",
                         lambda on: ({"thinking": {"type": "enabled"}} if on else
                                     {"thinking": {"type": "disabled"}, "reasoning_effort": "none"})),
-    "custom_openai": _Draft("自定义 · OpenAI 兼容", "openai", "", "", _NONE),
-    "custom_anthropic": _Draft("自定义 · Anthropic 兼容", "anthropic", "", "", _NONE),
 }
 
-# 这两个来源没有固定地址，设置页要多露一行 Base URL 出来
-CUSTOM = ("custom_openai", "custom_anthropic")
-# 起草时认思考开关的来源，设置页那句提示照着这里写
-THINKING = ("DeepSeek", "OpenRouter", "Anthropic", "Gemini")
+# 有固定地址、设置页不显示 Base URL
+CUSTOM = ()
+# 起草时认思考开关的来源（商汤网关吃 thinking.type + reasoning_effort）
+THINKING = ("商汤",)
 # 所有可能存 key 的环境变量（新两把 + 两个老名字），脱敏时一次全过一遍（jev_client.redact_secrets）
 ENV_VARS = sorted({JEV_ENV, LLM_ENV, *LEGACY.values()})
 
 
 if __name__ == "__main__":
-    # ponytail: 纯数据，只查几条不变式——协议打错字、自定义来源漏配 Base URL、思考字段写反最容易出。
-    assert {p.protocol for p in DRAFT_PROVIDERS.values()} == {"openai", "anthropic", "gemini"}
-    assert all(p.base or key in CUSTOM or p.protocol == "gemini"
-               for key, p in DRAFT_PROVIDERS.items())
-    assert all(not DRAFT_PROVIDERS[key].base for key in CUSTOM)
-    assert next(iter(DRAFT_PROVIDERS)) == "deepseek"  # 默认就是列表第一个
-    assert DRAFT_PROVIDERS["deepseek"].extra(True) == {"thinking": {"type": "enabled"}}
-    assert DRAFT_PROVIDERS["deepseek"].extra(False) == {"thinking": {"type": "disabled"}}
-    assert DRAFT_PROVIDERS["openrouter"].extra(True) == {"reasoning": {"enabled": True}}
-    assert DRAFT_PROVIDERS["moonshot"].extra(True) == {}
-    assert DRAFT_PROVIDERS["deepseek"].headers is None and DRAFT_PROVIDERS["deepseek"].keep is None
-    go = DRAFT_PROVIDERS["opencode"]
-    assert go.protocol == "openai" and go.base == "https://opencode.ai/zen/go/v1"
-    assert go.default == "deepseek-v4.1-flash" and go.extra(True) == {}
-    uuid.UUID(go.headers["x-opencode-session"])
-    assert go.headers["User-Agent"] == "jev-chat-windows" and "key" not in go.headers
-    assert go.keep("deepseek-v4.1-flash") and go.keep("glm-5.3") and go.keep("hy3")
-    assert not any(go.keep(m) for m in (
-        "minimax-m3", "qwen3.8-max", "grok-4.7", "gpt-6-luna", "muse-spark-1.2-contributor"))
-    # 全程只有两把 key，脱敏还得管老名字
-    assert ENV_VARS == ["DEEPSEEK_API_KEY", "JEV_API_KEY", "LLM_API_KEY", "OPENROUTER_API_KEY"]
+    assert set(DRAFT_PROVIDERS) == {"sensenova"}
+    assert set(JEV_PROVIDERS) == {"laya"}
+    assert DRAFT_PROVIDERS["sensenova"].protocol == "openai"
+    assert DRAFT_PROVIDERS["sensenova"].extra(True) == {"thinking": {"type": "enabled"}}
+    assert DRAFT_PROVIDERS["sensenova"].extra(False) == {
+        "thinking": {"type": "disabled"}, "reasoning_effort": "none"}
+    assert next(iter(DRAFT_PROVIDERS)) == "sensenova"  # 唯一来源即默认
+    assert JEV_PROVIDERS["laya"].default == "laya-local"
     print("providers ok")

@@ -573,12 +573,11 @@ class Overlay:
         self._fetched.done.connect(self._models_fetched)
         self.jev = self._model_group(box, "判断 · Jev", "jev", providers.JEV_PROVIDERS)
         box.addWidget(self._hint(
-            "判断意图、紧张度，并给三条候选排序。两家给的是同一个 Jev，必填。"
+            "本地 Laya 模型判断意图、紧张度，并给三条候选排序。跑在本机显卡上，免费、无需密钥。"
         ))
         self.draft = self._model_group(box, "起草 · 语言模型", "draft", providers.DRAFT_PROVIDERS)
         box.addWidget(self._hint(
-            "写那三条候选。OpenAI / Anthropic / Gemini 三种接口都走各自官方 SDK。"
-            "默认 DeepSeek 官网直连，国内最快。"
+            "写那三条候选。走商汤 SenseNova 网关，国内直连，几厘钱一条。"
         ))
         think_row = QHBoxLayout()
         think_row.addWidget(_label("起草时开启思考模式", 13), 1)
@@ -651,8 +650,8 @@ class Overlay:
         group.keyEdit.returnPressed.connect(self._save)
         box.addWidget(group.keyEdit)
         box.addWidget(self._hint(
-            "OpenRouter 的 key 或 TypeSafe 的 key，看上面选的来源。" if kind == "jev"
-            else "上面选哪家就填哪家的 key；换来源重填一次，只存这一把。"))
+            "本地 Laya 免密钥，无需填写。" if kind == "jev"
+            else "填商汤 SenseNova 的 API 密钥；只存环境变量，不落文件。"))
         model_label = _label("模型", 13)
         box.addWidget(model_label)
         row = QHBoxLayout()
