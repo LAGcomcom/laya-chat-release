@@ -14,25 +14,15 @@ for %%v in (3.12 3.11 3.10) do (
     py -%%v -c "import sys" >nul 2>&1 && (set "PYVER=%%v" & goto :found)
 )
 
-REM ---- 2. not found: try winget silent install ----
-echo Python 3.10-3.12 not found. Installing via winget (progress below, ~60MB, 1-3 min)...
-winget install -e --id Python.Python.3.12 --accept-package-agreements --accept-source-agreements
-for %%v in (3.12 3.11 3.10) do (
-    py -%%v -c "import sys" >nul 2>&1 && (set "PYVER=%%v" & goto :found)
-)
-
-REM ---- 3. winget missing too: download Python installer from CN mirror, silent install ----
-echo winget unavailable. Downloading Python 3.12 installer from CN mirror (~25MB)...
+REM ---- 2. not found: download from CN mirror (fast in China), silent install ----
+echo Python 3.10-3.12 not found. Downloading from CN mirror (~25MB)...
 set "PYSETUP=%TEMP%\python-3.12.10-amd64.exe"
 curl -L -# -o "%PYSETUP%" https://registry.npmmirror.com/-/binary/python/3.12.10/python-3.12.10-amd64.exe
-echo Download done. Installing silently (no windows will pop up, ~1 min)...
 if not exist "%PYSETUP%" (
-    echo [ERROR] Download failed. Check network, or install Python manually:
-    echo         https://www.python.org/downloads/  ^(check "Add python.exe to PATH"^)
-    pause
-    exit /b 1
+    echo [WARN] CN mirror download failed, falling back to winget...
+    goto :winget
 )
-echo Installing Python silently (per-user, no admin needed)...
+echo Download done. Installing silently (no windows will pop up, ~1 min)...
 "%PYSETUP%" /quiet InstallAllUsers=0 PrependPath=1 Include_launcher=1 Include_test=0
 del "%PYSETUP%" >nul 2>&1
 REM refresh PATH for this session after per-user install
@@ -40,6 +30,15 @@ set "PATH=%LOCALAPPDATA%\Programs\Python\Python312\;%LOCALAPPDATA%\Programs\Pyth
 for %%v in (3.12 3.11 3.10) do (
     py -%%v -c "import sys" >nul 2>&1 && (set "PYVER=%%v" & goto :found)
 )
+
+REM ---- 3. mirror path failed: winget as fallback ----
+:winget
+echo Trying winget (progress below, may take a few minutes)...
+winget install -e --id Python.Python.3.12 --accept-package-agreements --accept-source-agreements
+for %%v in (3.12 3.11 3.10) do (
+    py -%%v -c "import sys" >nul 2>&1 && (set "PYVER=%%v" & goto :found)
+)
+
 echo [ERROR] Python still not detected after install. Reboot and run this file again.
 pause
 exit /b 1
