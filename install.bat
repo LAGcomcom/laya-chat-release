@@ -15,16 +15,17 @@ for %%v in (3.12 3.11 3.10) do (
 )
 
 REM ---- 2. not found: try winget silent install ----
-echo Python 3.10-3.12 not found. Trying winget silent install (may take a few minutes)...
-winget install -e --id Python.Python.3.12 --silent --accept-package-agreements --accept-source-agreements >nul 2>&1
+echo Python 3.10-3.12 not found. Installing via winget (progress below, ~60MB, 1-3 min)...
+winget install -e --id Python.Python.3.12 --accept-package-agreements --accept-source-agreements
 for %%v in (3.12 3.11 3.10) do (
     py -%%v -c "import sys" >nul 2>&1 && (set "PYVER=%%v" & goto :found)
 )
 
 REM ---- 3. winget missing too: download Python installer from CN mirror, silent install ----
-echo winget unavailable. Downloading Python 3.12 installer from CN mirror...
+echo winget unavailable. Downloading Python 3.12 installer from CN mirror (~25MB)...
 set "PYSETUP=%TEMP%\python-3.12.10-amd64.exe"
-curl -L -o "%PYSETUP%" https://registry.npmmirror.com/-/binary/python/3.12.10/python-3.12.10-amd64.exe
+curl -L -# -o "%PYSETUP%" https://registry.npmmirror.com/-/binary/python/3.12.10/python-3.12.10-amd64.exe
+echo Download done. Installing silently (no windows will pop up, ~1 min)...
 if not exist "%PYSETUP%" (
     echo [ERROR] Download failed. Check network, or install Python manually:
     echo         https://www.python.org/downloads/  ^(check "Add python.exe to PATH"^)
