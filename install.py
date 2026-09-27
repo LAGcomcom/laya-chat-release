@@ -46,7 +46,7 @@ def run(cmd: list, env: dict | None = None, on_line=None, check: bool = True) ->
     if env:
         e.update(env)
     p = subprocess.Popen(cmd, env=e, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-                         bufsize=1)
+                         bufsize=0)  # binary + unbuffered; 按字节读以处理 CR 进度行
     assert p.stdout
 
     def emit(raw: bytes) -> None:
