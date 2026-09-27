@@ -122,12 +122,20 @@ class Reader:
 
     def new_lines(self, lines):
         """去重（滚动不重复）→ 这一帧里真正新出现的 [(who, name, text)]。
-        本帧有已知行时只要已知行下方的：往上滚翻出来的旧消息在已知行上方，不算。
-        本帧一行已知的都没有（大图把旧文字全顶出去了、切了聊天、滚远了）：全算，宁可多算不能漏。
+        规则一：只认已知行下方的未收录行——往上滚翻出来的旧消息在已知行上方，不算。
+        规则二：本帧一行已知的都没有（滚进了从未收录的历史区）——不报，宁等勿错。
+        未知历史区怎么翻都不触发；滚回已知区时，期间真到的新消息会在已知行下方被报出。
+        规则三：新会话引导——首次见到本会话只认最底部一条，其余一律视为历史。
         ponytail: 同一人连发两句一模一样的会吞一句——对触发分析无害。"""
+        if not self.seen:
+            if not lines:
+                return []
+            self.seen.extend((w, n, t) for w, n, t, _ in lines)
+            last = lines[-1]
+            return [(last[0], last[1], last[2])] if last[0] == "her" else []
         known_y = [y for w, n, t, y in lines if self._seen(w, n, t)]
-        floor = max(known_y) if known_y else -1
-        new = [(w, n, t) for w, n, t, y in lines if y > floor and not self._seen(w, n, t)]
+        new = [(w, n, t) for w, n, t, y in lines
+               if known_y and y > max(known_y) and not self._seen(w, n, t)]
         self.seen.extend((w, n, t) for w, n, t, _ in lines if not self._seen(w, n, t))
         del self.seen[:-500]
         return new
