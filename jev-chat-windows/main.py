@@ -36,7 +36,32 @@ import os
 memory = SessionMemory(os.path.dirname(os.path.abspath(__file__)),
                     summarize_fn=None, threshold=10)
 
+def history_path(title: str) -> str:
+    import re as _re
+    safe = _re.sub(r"[^\w\-一-鿿]", "_", (title or "chat"))[:40] or "chat"
+    return os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "history", safe + ".json")
+
+def save_history(title: str, history) -> None:
+    try:
+        os.makedirs(os.path.dirname(history_path(title)), exist_ok=True)
+        with open(history_path(title), "w", encoding="utf-8") as f:
+            json.dump(list(history)[-60:], f, ensure_ascii=False, indent=1)
+    except Exception:
+        pass
+
+def load_history(title: str) -> list:
+    try:
+        with open(history_path(title), encoding="utf-8") as f:
+            return [tuple(m) for m in json.load(f)]
+    except Exception:
+        return []
+
+
 def chat_of(title):
+    if title not in chats:
+        h = load_history(title)
+        if h:
+            chats[title] = {"history": deque(h, maxlen=60), "result": None, "rev": 0, "senders": [], "target": None}
     return chats.setdefault(title, {"history": deque(maxlen=60), "result": None, "rev": 0,
                                     "target": None, "senders": []})
 
@@ -245,6 +270,7 @@ def drain():
             ov.invalidate_replies()
         for who, name, text in new:
             chat["history"].append((who, text, name))
+            save_history(title, chat["history"])
             ov.log_message(who, text, name, chat=title)
             if who == "her" and name:  # 群里发过言的人，去重后最近的排最前
                 if name in chat["senders"]:
