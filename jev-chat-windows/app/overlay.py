@@ -173,7 +173,6 @@ class _TitleBar(QWidget):
 
 
 class _MainWindow(QWidget):
-    proactiveRequested = Signal(str)
     """窗口大小变了就叫 Overlay 重新排布；断点没跨过时 _relayout 自己不做事，这里不用防抖。"""
     def __init__(self, relayout):
         super().__init__()
@@ -1025,7 +1024,9 @@ class Overlay:
     def _on_proactive(self):
         title = self._chat or self.current_chat()
         if title:
-            self.proactiveRequested.emit(title)
+            cb = getattr(self, "on_proactive", None)
+            if cb:
+                cb(title)
 
     def _on_rel_changed(self, text):
         title = self._chat or ""

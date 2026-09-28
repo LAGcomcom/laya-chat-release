@@ -361,7 +361,7 @@ if __name__ == "__main__":  # Windows 的 spawn 会让子进程重新执行本�
     ov = Overlay(on_fill=fill_reply, on_toggle_capture=on_toggle_capture,
                  on_target_change=on_target_change, on_toggle_debug=set_debug,
                  result_of=lambda t: chats.get(t, {}).get("result"))
-    ov.proactiveRequested.connect(lambda t: proactive_bg(t))
+    ov.on_proactive = proactive_bg
     child = dbg = None
     try:
         state["hwnd"] = find_wechat_hwnd()
