@@ -34,6 +34,9 @@ SYSTEM = (
     "- 三条不是「温暖版／负责版／行动版」的模板，是同一个人在三个心情下随手打的，"
     "长短不一，其中一条可以很短（几个字）。\n"
     "风格：优先模仿 me 在对话里的用词、句长、标点和语气词习惯（下面会给样本）；"
+    "- 【承接铁律】三条都必须直接回应对话里的最新一条 her 消息：它在问事就先答事，"
+    "在要东西就先应东西，在发泄情绪就先接住情绪；禁止自开新话题、禁止答非所问、"
+    "禁止把对方说过的话原样当回复。\n"
     "对方是谁、什么关系看用户提示。群聊里每行用发言人自己的名字打头，指定了回复对象就只对 TA 说。\n"
     "判断参考：用户提示里带「判断参考」时，三条都要顺着它写——建议动作是「先核对聊天记录」就都去对记录，"
     "别盲道歉；是「简短回应或留白」就都别长篇。口吻规则照旧，判断只管写什么，不管怎么说。\n"
@@ -187,12 +190,17 @@ def draft_candidates(messages: list, relationship: str, provider: str = "deepsee
     if guidance and guidance.strip():
         user += f"\n\n{guidance.strip()}"
     user += "\n\n输出恰好 3 条候选，JSON 数组，每条一句。"
+    last_her = next((m.get("text") if isinstance(m, dict) else m[1]
+                     for m in reversed(messages)
+                     if (m.get("from") if isinstance(m, dict) else m[0]) == "her"), "")
+    if last_her:
+        user += f"\n\n【最新消息——三条候选都必须直接回应这句】：{str(last_her)[:120]}"
     key = _api_key(LLM_ENV)  # 起草只有这一把 key，换来源不用重填
     # 1.2：DeepSeek 自己推荐的闲聊档位，0.8 出来的话太板正
     # max_tokens：三句话本来 400 够，但思考过程也算进 max_tokens，开了思考模式 400 会把答案截断
     call = lambda turns: chat(  # noqa: E731 —— 三个参数会变，其余每次都一样
         spec.protocol, base_url or spec.base, key, model or spec.default, SYSTEM, turns,
-        temperature=1.2, max_tokens=4000 if thinking else 400, thinking=thinking,
+        temperature=0.95, max_tokens=4000 if thinking else 400, thinking=thinking,
         extra_body=spec.extra(thinking), headers=spec.headers, timeout=timeout)
 
     content = call([user])
