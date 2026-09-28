@@ -70,6 +70,9 @@ def _has_cjk(s: str) -> bool:
     return any("一" <= c <= "鿿" for c in s)
 
 def _zh2en(texts: list) -> list:
+    # 微调后的中文检查点 (laya-zh) 原生吃中文: 翻译层默认关闭, 设 LAYA_ZH2EN=1 才启用
+    if not os.environ.get("LAYA_ZH2EN"):
+        return texts
     pair = _translator()
     if not pair or pair[0] == "off":
         return texts
