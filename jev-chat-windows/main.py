@@ -191,6 +191,30 @@ def check_update_bg():
         update_result.put(r)
 
 
+def proactive_bg(title):
+    """主动开场：生成 3 条候选并让判断模型打分，结果走同一条渲染管线。"""
+    chat = chat_of(title)
+    if not chat["history"]:
+        ov.set_status("这个会话还没有可参考的聊天记录", "warning")
+        return
+    state["busy"] = True
+    ov.set_busy(True)
+    threading.Thread(target=_proactive_run, args=(title, list(chat["history"]),
+                     chat["rev"]), daemon=True).start()
+
+def _proactive_run(title, msgs, revision):
+    try:
+        lore = memory.relevant_entries(title, [m[1] for m in msgs[-10:]])
+        r = proactive(msgs, contacts.get(title)["relationship"] or settings.relationship(),
+                      summary=memory.get_summary(title), lore=lore,
+                      persona=contacts.get(title), style_prompt=settings.style_prompt(),
+                      model=settings.draft_model() or None,
+                      provider=settings.draft_provider(),
+                      base_url=settings.draft_base_url() or None)
+        results.put(("ok", r, title, revision))
+    except Exception as e:
+        results.put(("err", f"主动开场失败: {e}", title, revision))
+
 def start_analyze(title, msgs):
     tc = settings.target_contact()
     if tc and title != tc:
@@ -337,6 +361,7 @@ if __name__ == "__main__":  # Windows 的 spawn 会让子进程重新执行本�
     ov = Overlay(on_fill=fill_reply, on_toggle_capture=on_toggle_capture,
                  on_target_change=on_target_change, on_toggle_debug=set_debug,
                  result_of=lambda t: chats.get(t, {}).get("result"))
+    ov.proactiveRequested.connect(lambda t: proactive_bg(t))
     child = dbg = None
     try:
         state["hwnd"] = find_wechat_hwnd()

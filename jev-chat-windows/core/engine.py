@@ -69,6 +69,13 @@ def analyze(messages: list, relationship: str, model: str | None = None,
         and (v.get("choice") is not None or isinstance(v.get("score"), (int, float)))
         and (v.get("confidence") or 0) >= CONF_GATE
     }
+    # 情绪承接加码：判断出 TA 在发泄/需要被理解时，给起草一条硬提示
+    emo_hint = ""
+    vi = (safe_answers.get("true_intent") or {}).get("choice")
+    sn = (safe_answers.get("she_needs") or {}).get("choice")
+    if vi == "vent_anger" or sn in ("care", "apology"):
+        emo_hint = "对方现在最需要的是【被理解】而不是被解决——第一条候选的第一句必须先接住情绪，之后才能说别的。"
+    guidance_final = (guidance_text(safe_answers) + chr(10) + chr(10) + emo_hint).strip() if (safe_answers or emo_hint) else None
     candidates = draft_candidates(messages, relationship, provider=provider, model=model,
                                   base_url=base_url, timeout=timeout, keep=context,
                                   reply_to=reply_to, style=style, thinking=thinking,
@@ -127,3 +134,43 @@ if __name__ == "__main__":
         except JevError as e:
             assert "没有可用候选" in str(e)
     print("engine ok")
+
+
+def proactive(messages_recent: list, relationship: str, summary=None, lore=None,
+              persona=None, style_prompt=None, provider: str = "deepseek",
+              model=None, base_url=None, timeout: float = 40,
+              jev_provider=None, jev_model=None) -> dict:
+    """主动开场 3 条候选 + 用判断模型给"现在发合不合适"打分。
+    返回与 analyze 同形的结果（candidates/scores/best_index），可直接喂给悬浮窗。"""
+    from .proactive import proactive_candidates
+    from .jev_client import ask
+    cands = proactive_candidates(messages_recent, relationship, summary=summary,
+                                 lore=lore, persona=persona, style_prompt=style_prompt,
+                                 provider=provider, model=model, base_url=base_url,
+                                 timeout=timeout)
+    if not cands:
+        raise RuntimeError("主动开场候选为空")
+
+    scores = [0.0] * len(cands)
+    try:
+        state = {"chat": {"relationship": relationship,
+                          "messages": [{"from": m[0], "text": m[1]} for m in messages_recent[-6:]],
+                          "latest_from": "me", "is_group": False}}
+        questions = {f"c{i}": {"type": "noul",
+                     "instructions": "If 'me' sends this message to 'her' right now, would it land well - natural, timely, and likely to get a good response?"}
+                     for i in range(len(cands))}
+        gold = {}
+        for i in range(len(cands)):
+            gold[f"c{i}"] = {"probabilities": {"false": 0.0, "true": 1.0}}
+        state["chat"]["proactive_drafts"] = cands
+        r = ask(state, questions, provider=jev_provider or "laya", model=jev_model, timeout=timeout)
+        for i in range(len(cands)):
+            a = (r.get("answers") or {}).get(f"c{i}") or {}
+            scores[i] = float(a.get("noul") or 0.0)
+    except Exception:
+        pass  # 打分失败就按原序展示
+
+    best = scores.index(max(scores)) if scores else 0
+    return {"candidates": cands, "best_index": best, "best_reply": cands[best],
+            "scores": scores, "answers": {}, "usage": {}, "reply_to": None,
+            "draft_provider": "proactive"}

@@ -173,6 +173,7 @@ class _TitleBar(QWidget):
 
 
 class _MainWindow(QWidget):
+    proactiveRequested = Signal(str)
     """窗口大小变了就叫 Overlay 重新排布；断点没跨过时 _relayout 自己不做事，这里不用防抖。"""
     def __init__(self, relayout):
         super().__init__()
@@ -390,6 +391,11 @@ class Overlay:
         self.relBox.setToolTip("给当前会话单独设关系（留空=沿用全局设置）；自定义可直接输入")
         self.relBox.currentTextChanged.connect(self._on_rel_changed)
         chat_row.addWidget(self.relBox)
+        from qfluentwidgets import PrimaryPushButton
+        self.proactiveBtn = PrimaryPushButton("主动开场")
+        self.proactiveBtn.setToolTip("不等 TA 发消息，AI 主动起话题（3 条候选，发送仍手动）")
+        self.proactiveBtn.clicked.connect(self._on_proactive)
+        chat_row.addWidget(self.proactiveBtn)
         self.chatFollow = _label("", 11, _MUTED)
         self.chatFollow.setFixedWidth(52)
         self.chatFollow.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
@@ -1015,6 +1021,11 @@ class Overlay:
         self.latest.setText(text if len(text) <= 120 else text[:120] + "…")
         self.latest.setToolTip(text)
         self.context.show()
+
+    def _on_proactive(self):
+        title = self._chat or self.current_chat()
+        if title:
+            self.proactiveRequested.emit(title)
 
     def _on_rel_changed(self, text):
         title = self._chat or ""
