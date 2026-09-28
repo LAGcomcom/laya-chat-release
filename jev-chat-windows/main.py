@@ -30,6 +30,8 @@ results = queue.Queue()
 update_result = queue.Queue()  # 独立小队列，别跟 results 的 (kind, r, title, revision) 形状搅在一起
 
 
+import json
+import re
 import os
 memory = SessionMemory(os.path.dirname(os.path.abspath(__file__)),
                     summarize_fn=None, threshold=10)
@@ -109,6 +111,7 @@ def on_toggle_capture(on):
 def analyze_bg(msgs, title, revision, reply_to=None):
     """后台线程只跑网络调用，结果丢队列；UI 只在主线程的 tick 里动（Qt 不能跨线程碰）。"""
     try:
+        lore = memory.relevant_entries(title, [m[1] for m in msgs[-10:]]) if msgs else ""
         results.put(("ok", analyze(msgs, settings.relationship(), context=settings.context(),
                                    model=settings.draft_model() or None,
                                    provider=settings.draft_provider(),
@@ -131,14 +134,26 @@ def _make_summarizer():
     model = settings.draft_model() or spec.default
     key = settings.llm_key()
     sys_p = "把中文聊天对话压缩成 2~3 句摘要：在聊什么话题、双方立场和情绪、有什么待办或分歧。只输出摘要本身。"
-    def run(prev, msgs):
+    def run(prev, entries, msgs):
         lines = "\n".join(f"{w}: {t}" for w, t in msgs)
         prev_part = f"此前摘要：{prev}\n" if prev else ""
+        ent_part = ""
+        if entries:
+            ent_part = "已有词条（沿用仍相关的，淘汰过时的，补充新事实）：\n" + "\n".join(f"- {e.get('keys')}: {e.get('content')}" for e in entries) + "\n"
+        sys_p = ("更新对话记忆。输出纯 JSON：{\"summary\":\"2~3句摘要：话题/立场/待办\","
+                 "\"entries\":[{\"keys\":[\"触发词1\",\"触发词2\"],\"content\":\"一句事实\"}]}。"
+                 "entries 是关于对方的长期事实（喜好/雷点/在忙的事/称呼偏好），每条 1~3 个"
+                 "将来聊天里可能出现的触发词；不要琐碎复述。只输出 JSON。")
         r = core_llm.chat(spec.protocol, base, key, model, sys_p,
-                          [prev_part + "新对话：\n" + lines],
-                          temperature=0.3, max_tokens=200, thinking=False,
-                          extra_body=spec.extra(False), headers=spec.headers, timeout=20)
-        return (r or "").strip()
+                          [prev_part + ent_part + "新对话：\n" + lines],
+                          temperature=0.3, max_tokens=500, thinking=False,
+                          extra_body=spec.extra(False), headers=spec.headers, timeout=30)
+        try:
+            txt = re.sub(r"^```(?:json)?|```$", "", (r or "").strip(), flags=re.M)
+            d = json.loads(txt)
+            return {"summary": str(d.get("summary") or ""), "entries": d.get("entries") or []}
+        except Exception:
+            return {"summary": (r or "").strip()[:300], "entries": []}
     return run
 
 memory.summarize_fn = _make_summarizer

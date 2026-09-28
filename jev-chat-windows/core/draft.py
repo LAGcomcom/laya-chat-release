@@ -168,7 +168,8 @@ def draft_candidates(messages: list, relationship: str, provider: str = "deepsee
                      model: str | None = None, base_url: str | None = None,
                      timeout: float = 30, keep: int = 10,
                      reply_to: str | None = None, style: str = "", thinking: bool = False,
-                     guidance: str | None = None, summary: str | None = None) -> list[str]:
+                     guidance: str | None = None, summary: str | None = None,
+                     lore: str | None = None) -> list[str]:
     """messages: [(from, text)] 或 [(from, text, name)]，from ∈ {her, me}，name = 群里的发言人；
     只看最近 keep 条。返回最多 3 条中文候选（过滤后可能是 0 条，调用方要处理）。
 
@@ -198,6 +199,9 @@ def draft_candidates(messages: list, relationship: str, provider: str = "deepsee
     if summary and summary.strip():
         user += (f"\n\n【更早对话的背景摘要——回复要延续这个背景，别翻旧账重吵】:"
                  f"\n\n{summary.strip()[:400]}")
+    if lore and lore.strip():
+        user += (f"\n\n【关于对方和背景的备忘——按需参考，别生硬复述】:"
+                 f"\n\n{lore.strip()[:400]}")
     if guidance and guidance.strip():
         user += f"\n\n{guidance.strip()}"
     user += "\n\n输出恰好 3 条候选，JSON 数组；每条候选可以是一句话，也可以是用换行分隔的 2~3 句连发。"
