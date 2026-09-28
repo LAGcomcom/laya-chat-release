@@ -169,7 +169,8 @@ def draft_candidates(messages: list, relationship: str, provider: str = "deepsee
                      timeout: float = 30, keep: int = 10,
                      reply_to: str | None = None, style: str = "", thinking: bool = False,
                      guidance: str | None = None, summary: str | None = None,
-                     lore: str | None = None, persona: dict | None = None) -> list[str]:
+                     lore: str | None = None, persona: dict | None = None,
+                     style_prompt: str | None = None) -> list[str]:
     """messages: [(from, text)] 或 [(from, text, name)]，from ∈ {her, me}，name = 群里的发言人；
     只看最近 keep 条。返回最多 3 条中文候选（过滤后可能是 0 条，调用方要处理）。
 
@@ -196,6 +197,9 @@ def draft_candidates(messages: list, relationship: str, provider: str = "deepsee
         user += f"\n\n我对自己口吻的描述：{style.strip()}"
     if reply_to:
         user += f"\n\n这是群聊。你要回复的是「{reply_to}」的话，三条候选都对 TA 说，不要@别人。"
+    if style_prompt and style_prompt.strip():
+        user += (f"\n\n【我的说话人格——用这个人设的思维方式说话】:"
+                 f"\n\n{style_prompt.strip()}")
     if persona:
         blocks = []
         if persona.get("background"):

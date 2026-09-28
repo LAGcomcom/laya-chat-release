@@ -26,7 +26,7 @@ def _add_usage(total: dict, one: dict | None) -> None:
 def analyze(messages: list, relationship: str, model: str | None = None,
             timeout: float = 30, context: int = 10, provider: str = "deepseek",
             base_url: str | None = None, reply_to: str | None = None, style: str = "",
-            thinking: bool = False, summary: str | None = None, lore: str | None = None,
+            thinking: bool = False, summary: str | None = None, lore: str | None = None, style_prompt: str | None = None,
             persona: dict | None = None,
             jev_provider: str = "openrouter",
             jev_model: str | None = None) -> dict:
@@ -73,7 +73,7 @@ def analyze(messages: list, relationship: str, model: str | None = None,
                                   base_url=base_url, timeout=timeout, keep=context,
                                   reply_to=reply_to, style=style, thinking=thinking,
                                   guidance=guidance_text(safe_answers) if safe_answers else None,
-                                  summary=summary, lore=lore, persona=persona)
+                                  summary=summary, lore=lore, persona=persona, style_prompt=style_prompt)
     if not candidates:  # 注入过滤可以把起草结果全扔掉；接着取 [0] 会 IndexError
         raise JevError("起草结果没有可用候选回复")
 
