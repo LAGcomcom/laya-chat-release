@@ -37,6 +37,14 @@ SYSTEM = (
     "- 【承接铁律】三条都必须直接回应对话里的最新一条 her 消息：它在问事就先答事，"
     "在要东西就先应东西，在发泄情绪就先接住情绪；禁止自开新话题、禁止答非所问、"
     "禁止把对方说过的话原样当回复。\n"
+    "- 【连贯铁律】延续对话里已经在聊的话题和用词（在聊快递就一直聊快递），"
+
+    "除非对方自己换了话题；不要凭空引入对话里没出现过的新信息。"
+
+    "- 【连发拟真】对方连发了几条、或你要说的内容多于一句时，候选可以写成 2~3 条连发，"
+
+    "条与条之间用一个换行分隔（像真人分几个气泡发那样，每条都短）；对方只发一句简单的话时，候选就一两条。"
+
     "对方是谁、什么关系看用户提示。群聊里每行用发言人自己的名字打头，指定了回复对象就只对 TA 说。\n"
     "判断参考：用户提示里带「判断参考」时，三条都要顺着它写——建议动作是「先核对聊天记录」就都去对记录，"
     "别盲道歉；是「简短回应或留白」就都别长篇。口吻规则照旧，判断只管写什么，不管怎么说。\n"
@@ -160,7 +168,7 @@ def draft_candidates(messages: list, relationship: str, provider: str = "deepsee
                      model: str | None = None, base_url: str | None = None,
                      timeout: float = 30, keep: int = 10,
                      reply_to: str | None = None, style: str = "", thinking: bool = False,
-                     guidance: str | None = None) -> list[str]:
+                     guidance: str | None = None, summary: str | None = None) -> list[str]:
     """messages: [(from, text)] 或 [(from, text, name)]，from ∈ {her, me}，name = 群里的发言人；
     只看最近 keep 条。返回最多 3 条中文候选（过滤后可能是 0 条，调用方要处理）。
 
@@ -187,9 +195,12 @@ def draft_candidates(messages: list, relationship: str, provider: str = "deepsee
         user += f"\n\n我对自己口吻的描述：{style.strip()}"
     if reply_to:
         user += f"\n\n这是群聊。你要回复的是「{reply_to}」的话，三条候选都对 TA 说，不要@别人。"
+    if summary and summary.strip():
+        user += (f"\n\n【更早对话的背景摘要——回复要延续这个背景，别翻旧账重吵】:"
+                 f"\n\n{summary.strip()[:400]}")
     if guidance and guidance.strip():
         user += f"\n\n{guidance.strip()}"
-    user += "\n\n输出恰好 3 条候选，JSON 数组，每条一句。"
+    user += "\n\n输出恰好 3 条候选，JSON 数组；每条候选可以是一句话，也可以是用换行分隔的 2~3 句连发。"
     last_her = next((m.get("text") if isinstance(m, dict) else m[1]
                      for m in reversed(messages)
                      if (m.get("from") if isinstance(m, dict) else m[0]) == "her"), "")

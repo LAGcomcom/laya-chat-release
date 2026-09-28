@@ -26,7 +26,8 @@ def _add_usage(total: dict, one: dict | None) -> None:
 def analyze(messages: list, relationship: str, model: str | None = None,
             timeout: float = 30, context: int = 10, provider: str = "deepseek",
             base_url: str | None = None, reply_to: str | None = None, style: str = "",
-            thinking: bool = False, jev_provider: str = "openrouter",
+            thinking: bool = False, summary: str | None = None,
+            jev_provider: str = "openrouter",
             jev_model: str | None = None) -> dict:
     """messages: [(from, text)] from ∈ {her, me}，最新一条在最后；
     群聊里可以带第三项 name（说这句话的人），单聊不带。
@@ -70,7 +71,8 @@ def analyze(messages: list, relationship: str, model: str | None = None,
     candidates = draft_candidates(messages, relationship, provider=provider, model=model,
                                   base_url=base_url, timeout=timeout, keep=context,
                                   reply_to=reply_to, style=style, thinking=thinking,
-                                  guidance=guidance_text(safe_answers) if safe_answers else None)
+                                  guidance=guidance_text(safe_answers) if safe_answers else None,
+                                  summary=summary)
     if not candidates:  # 注入过滤可以把起草结果全扔掉；接着取 [0] 会 IndexError
         raise JevError("起草结果没有可用候选回复")
 

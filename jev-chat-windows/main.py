@@ -30,6 +30,10 @@ results = queue.Queue()
 update_result = queue.Queue()  # 独立小队列，别跟 results 的 (kind, r, title, revision) 形状搅在一起
 
 
+import os
+memory = SessionMemory(os.path.dirname(os.path.abspath(__file__)),
+                    summarize_fn=None, threshold=10)
+
 def chat_of(title):
     return chats.setdefault(title, {"history": deque(maxlen=60), "result": None, "rev": 0,
                                     "target": None, "senders": []})
@@ -117,6 +121,27 @@ def analyze_bg(msgs, title, revision, reply_to=None):
     except Exception as e:
         results.put(("err", f"分析失败: {e}", title, revision))
 
+
+def _make_summarizer():
+    """摘要器：走当前起草来源（便宜档），把旧对话压成 2~3 句。"""
+    from core.providers import DRAFT_PROVIDERS
+    from core import llm as core_llm
+    spec = DRAFT_PROVIDERS[settings.draft_provider()]
+    base = settings.draft_base_url() or spec.base
+    model = settings.draft_model() or spec.default
+    key = settings.llm_key()
+    sys_p = "把中文聊天对话压缩成 2~3 句摘要：在聊什么话题、双方立场和情绪、有什么待办或分歧。只输出摘要本身。"
+    def run(prev, msgs):
+        lines = "\n".join(f"{w}: {t}" for w, t in msgs)
+        prev_part = f"此前摘要：{prev}\n" if prev else ""
+        r = core_llm.chat(spec.protocol, base, key, model, sys_p,
+                          [prev_part + "新对话：\n" + lines],
+                          temperature=0.3, max_tokens=200, thinking=False,
+                          extra_body=spec.extra(False), headers=spec.headers, timeout=20)
+        return (r or "").strip()
+    return run
+
+memory.summarize_fn = _make_summarizer
 
 def check_update_bg():
     """启动时后台查一次新版本，跟 analyze_bg 一个套路：网络调用在线程里，UI 只在 tick() 里动。"""
