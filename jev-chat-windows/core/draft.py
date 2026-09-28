@@ -169,7 +169,7 @@ def draft_candidates(messages: list, relationship: str, provider: str = "deepsee
                      timeout: float = 30, keep: int = 10,
                      reply_to: str | None = None, style: str = "", thinking: bool = False,
                      guidance: str | None = None, summary: str | None = None,
-                     lore: str | None = None) -> list[str]:
+                     lore: str | None = None, persona: dict | None = None) -> list[str]:
     """messages: [(from, text)] 或 [(from, text, name)]，from ∈ {her, me}，name = 群里的发言人；
     只看最近 keep 条。返回最多 3 条中文候选（过滤后可能是 0 条，调用方要处理）。
 
@@ -196,6 +196,19 @@ def draft_candidates(messages: list, relationship: str, provider: str = "deepsee
         user += f"\n\n我对自己口吻的描述：{style.strip()}"
     if reply_to:
         user += f"\n\n这是群聊。你要回复的是「{reply_to}」的话，三条候选都对 TA 说，不要@别人。"
+    if persona:
+        blocks = []
+        if persona.get("background"):
+            blocks.append("【TA 和我的背景】" + str(persona["background"])[:300])
+        if persona.get("personality"):
+            blocks.append("【TA 的性格】" + str(persona["personality"])[:200])
+        if persona.get("taboos"):
+            blocks.append("【雷点——绝对别提】" + str(persona["taboos"])[:200])
+        if persona.get("examples"):
+            ex = ("' + E + E + '").join(str(x)[:150] for x in persona["examples"][:3])
+            blocks.append("【示例对话——照这个感觉回】" + "' + E + E + '" + ex)
+        if blocks:
+            user += ("' + E + E + '").join([""] + blocks)
     if summary and summary.strip():
         user += (f"\n\n【更早对话的背景摘要——回复要延续这个背景，别翻旧账重吵】:"
                  f"\n\n{summary.strip()[:400]}")

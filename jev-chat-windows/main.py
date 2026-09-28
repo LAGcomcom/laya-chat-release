@@ -192,6 +192,9 @@ def check_update_bg():
 
 
 def start_analyze(title, msgs):
+    tc = settings.target_contact()
+    if tc and title != tc:
+        return  # 专属模式: 只分析和指定会话的聊天
     if not settings.has_key():
         ov.set_status("请先在设置中配置模型", "warning")
         return

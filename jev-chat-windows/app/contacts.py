@@ -25,7 +25,11 @@ class ContactStore:
                 d = json.load(f)
             if isinstance(d, dict):
                 return {"relationship": str(d.get("relationship") or ""),
-                        "style": str(d.get("style") or "")}
+                        "style": str(d.get("style") or ""),
+                        "background": str(d.get("background") or ""),
+                        "personality": str(d.get("personality") or ""),
+                        "taboos": str(d.get("taboos") or ""),
+                        "examples": [str(x) for x in d.get("examples", []) if str(x).strip()]}
         except Exception:
             pass
         return {"relationship": "", "style": ""}
