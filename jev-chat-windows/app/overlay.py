@@ -380,6 +380,15 @@ class Overlay:
         self.chatBox.setToolTip("聊天窗口切到哪个会话这里就跟到哪个；也可以自己选一个，只看它的记录和建议")
         self.chatBox.currentIndexChanged.connect(self._on_chat_selected)
         chat_row.addWidget(self.chatBox, 1)
+        self.relLabel = _label("关系", 12, _MUTED)
+        chat_row.addWidget(self.relLabel)
+        self.relBox = _FitCombo()
+        self.relBox.setEditable(True)
+        self.relBox.setPlaceholderText("沿用全局")
+        self.relBox.addItems(["客服", "朋友", "恋人", "家人", "同事", "买卖"])
+        self.relBox.setToolTip("给当前会话单独设关系（留空=沿用全局设置）；自定义可直接输入")
+        self.relBox.currentTextChanged.connect(self._on_rel_changed)
+        chat_row.addWidget(self.relBox)
         self.chatFollow = _label("", 11, _MUTED)
         self.chatFollow.setFixedWidth(52)
         self.chatFollow.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
@@ -1006,6 +1015,20 @@ class Overlay:
         self.latest.setToolTip(text)
         self.context.show()
 
+    def _on_rel_changed(self, text):
+        title = self._chat or ""
+        if not title:
+            return
+        from .contacts import contacts
+        contacts.set(title, relationship=text.strip())
+        self.relSaved.setText("已保存" if text.strip() else "已清空(用全局)")
+
+    def _load_rel(self, title):
+        from .contacts import contacts
+        self.relBox.blockSignals(True)
+        self.relBox.setCurrentText(contacts.get(title)["relationship"])
+        self.relBox.blockSignals(False)
+
     def current_chat(self):
         """界面上正在看的会话（不一定是微信当前开着的那个）。"""
         return self._shown
@@ -1017,6 +1040,7 @@ class Overlay:
         browsing = self._shown != self._chat  # 正看着的就是它、但之前是「浏览中」：也得重画，把填入放开
         self._chat = title
         self._add_chat(title)
+        self._load_rel(title)
         if title != self._shown or browsing:
             self.chatBox.blockSignals(True)
             self.chatBox.setCurrentIndex(self.chatBox.findText(title))

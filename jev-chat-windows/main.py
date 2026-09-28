@@ -137,7 +137,8 @@ def analyze_bg(msgs, title, revision, reply_to=None):
     """后台线程只跑网络调用，结果丢队列；UI 只在主线程的 tick 里动（Qt 不能跨线程碰）。"""
     try:
         lore = memory.relevant_entries(title, [m[1] for m in msgs[-10:]]) if msgs else ""
-        results.put(("ok", analyze(msgs, settings.relationship(), context=settings.context(),
+        results.put(("ok", analyze(msgs, contacts.get(title)["relationship"] or settings.relationship(),
+                                   context=settings.context(),
                                    model=settings.draft_model() or None,
                                    provider=settings.draft_provider(),
                                    base_url=settings.draft_base_url() or None,
