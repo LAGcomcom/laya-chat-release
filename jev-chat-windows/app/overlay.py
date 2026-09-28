@@ -1022,7 +1022,7 @@ class Overlay:
             return
         from .contacts import contacts
         contacts.set(title, relationship=text.strip())
-        self.relSaved.setText("已保存" if text.strip() else "已清空(用全局)")
+        self.set_status("关系已保存: " + (text.strip() or "沿用全局"), "success")
 
     def _load_rel(self, title):
         from .contacts import contacts
