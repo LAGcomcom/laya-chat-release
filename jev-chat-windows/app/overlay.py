@@ -382,8 +382,9 @@ class Overlay:
         chat_row.addWidget(self.chatBox, 1)
         self.relLabel = _label("关系", 12, _MUTED)
         chat_row.addWidget(self.relLabel)
-        self.relBox = _FitCombo()
-        self.relBox.setEditable(True)
+        from qfluentwidgets import EditableComboBox
+        self.relBox = EditableComboBox()
+        self.relBox.setFixedWidth(120)
         self.relBox.setPlaceholderText("沿用全局")
         self.relBox.addItems(["客服", "朋友", "恋人", "家人", "同事", "买卖"])
         self.relBox.setToolTip("给当前会话单独设关系（留空=沿用全局设置）；自定义可直接输入")
