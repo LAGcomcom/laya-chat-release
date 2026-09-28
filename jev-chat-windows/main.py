@@ -10,6 +10,7 @@ import ctypes
 import multiprocessing
 import queue
 import threading
+import time
 import traceback
 from collections import deque
 
@@ -41,11 +42,58 @@ def history_path(title: str) -> str:
     safe = _re.sub(r"[^\w\-一-鿿]", "_", (title or "chat"))[:40] or "chat"
     return os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "history", safe + ".json")
 
+def sessions_file() -> str:
+    return os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "history", "_sessions.json")
+
+def touch_session(title: str, last_active: bool = False) -> None:
+    """会话注册表：记录所有见过的会话与最近活跃的那个（原子写，防中断损坏）。"""
+    try:
+        data = {}
+        if os.path.exists(sessions_file()):
+            with open(sessions_file(), encoding="utf-8") as f:
+                data = json.load(f)
+        if title:
+            data[title] = {"ts": time.time(), "last_active": True}
+        for k in list(data):
+            if last_active and k != title:
+                data[k]["last_active"] = False
+        tmp = sessions_file() + ".tmp"
+        with open(tmp, "w", encoding="utf-8") as f:
+            json.dump(data, f, ensure_ascii=False, indent=1)
+        os.replace(tmp, sessions_file())
+    except Exception:
+        pass
+
 def save_history(title: str, history) -> None:
     try:
         os.makedirs(os.path.dirname(history_path(title)), exist_ok=True)
-        with open(history_path(title), "w", encoding="utf-8") as f:
+        tmp = history_path(title) + ".tmp"
+        with open(tmp, "w", encoding="utf-8") as f:
             json.dump(list(history)[-60:], f, ensure_ascii=False, indent=1)
+        os.replace(tmp, history_path(title))
+        touch_session(title)
+    except Exception:
+        pass
+
+def restore_sessions() -> None:
+    """启动时恢复所有历史会话与上次活跃的会话——不用等 OCR 重新识别。"""
+    try:
+        if not os.path.exists(sessions_file()):
+            return
+        with open(sessions_file(), encoding="utf-8") as f:
+            data = json.load(f)
+        last = None
+        for title, info in sorted(data.items(), key=lambda kv: -kv[1].get("ts", 0)):
+            h = load_history(title)
+            if not h:
+                continue
+            chat_of(title)  # 触发磁盘历史加载
+            ov.set_chat(title)
+            if info.get("last_active"):
+                last = title
+        if last:
+            ov.set_chat(last)  # 跟回上次活跃的会话
+            ov.log(f"已恢复会话: {last}")
     except Exception:
         pass
 
@@ -260,6 +308,7 @@ def drain():
             continue
         if kind == "chat":  # 微信切了会话，界面跟过去（用户正浏览别的会话时也跟，微信是准的）
             state["chat"] = msg[1]
+            touch_session(msg[1], last_active=True)
             ov.set_chat(msg[1])
             continue
         if kind == "debug":  # 调试视图的一帧；窗口不在就直接丢掉
@@ -362,6 +411,7 @@ if __name__ == "__main__":  # Windows 的 spawn 会让子进程重新执行本�
                  on_target_change=on_target_change, on_toggle_debug=set_debug,
                  result_of=lambda t: chats.get(t, {}).get("result"))
     ov.on_proactive = proactive_bg
+    restore_sessions()
     child = dbg = None
     try:
         state["hwnd"] = find_wechat_hwnd()
