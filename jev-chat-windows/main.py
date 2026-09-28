@@ -142,7 +142,7 @@ def analyze_bg(msgs, title, revision, reply_to=None):
                                    model=settings.draft_model() or None,
                                    provider=settings.draft_provider(),
                                    base_url=settings.draft_base_url() or None,
-                                   reply_to=reply_to, style=settings.style(),
+                                   reply_to=reply_to,
                                    thinking=settings.thinking(),
                                    jev_provider=settings.jev_provider(),
                                    jev_model=settings.jev_model() or None),
@@ -266,6 +266,9 @@ def drain():
         _, title, new, area = msg
         state["area"] = area
         chat = chat_of(title)
+        if chat.pop("from_disk", None):
+            for who, text, name in list(chat["history"])[-20:]:
+                ov.log_message(who, text, name, chat=title)
         chat["rev"] += 1  # 这个会话有新消息了，它在跑的分析作废
         if title == ov.current_chat():  # 看的是别的会话就别把人家的候选划掉
             ov.invalidate_replies()
