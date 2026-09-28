@@ -23,6 +23,70 @@ except ImportError:
     from providers import (ENV_VARS, JEV_ENV, JEV_PROVIDERS, LEGACY,
                            OPENROUTER_DECISIONS, OPENROUTER_KEY_URL, TYPESAFE_BASE)
 
+
+# ---- 中文→英文 翻译层（可选）：Laya 对英文判断远强于中文，发送前自动机翻 ----
+_TR = "uninit"
+
+def _translator():
+    """惰性加载 CT2 中英翻译模型；任何失败都永久降级为直用中文。"""
+    global _TR
+    if _TR != "uninit":
+        return _TR
+    try:
+        # 分词器/模型已在本地缓存：强制离线，避免 from_pretrained 联网检查被墙超时
+        os.environ.setdefault("HF_HUB_OFFLINE", "1")
+        os.environ.setdefault("HF_ENDPOINT", "https://hf-mirror.com")
+        import ctranslate2
+        from transformers import MarianTokenizer
+        d = os.environ.get("LAYA_ZH2EN_DIR", r"D:\决断模型\ct2-zh-en")
+        tok = MarianTokenizer.from_pretrained("Helsinki-NLP/opus-mt-zh-en")
+        def _usable(tr):
+            # 构造成功不代表能用（cublas 缺失到真正翻译时才炸）：预热一句验证
+            try:
+                t = tok.convert_ids_to_tokens(tok.encode("测试"))
+                tr.translate_batch([t], max_decoding_length=8, beam_size=1)
+                return True
+            except Exception:
+                return False
+        dev = "cuda" if os.environ.get("LAYA_DEVICE", "cuda") == "cuda" else "cpu"
+        _TR = ("off",)
+        if dev == "cuda":
+            try:
+                import torch  # 带出 torch/lib 里的 cublas64_12.dll 等 CUDA 运行库
+                tr = ctranslate2.Translator(d, device="cuda")
+                if _usable(tr):
+                    _TR = (tok, tr)
+            except Exception:
+                pass
+        if _TR == ("off",):
+            tr = ctranslate2.Translator(d, device="cpu")
+            if _usable(tr):
+                _TR = (tok, tr)
+    except Exception:
+        _TR = ("off",)
+    return _TR
+
+def _has_cjk(s: str) -> bool:
+    return any("一" <= c <= "鿿" for c in s)
+
+def _zh2en(texts: list) -> list:
+    pair = _translator()
+    if not pair or pair[0] == "off":
+        return texts
+    tok, tr = pair
+    idx = [i for i, t in enumerate(texts) if _has_cjk(t)]
+    if not idx:
+        return texts
+    try:
+        toks = [tok.convert_ids_to_tokens(tok.encode(texts[i])) for i in idx]
+        res = tr.translate_batch(toks, max_decoding_length=120, beam_size=1)
+        out = list(texts)
+        for j, r in zip(idx, res):
+            out[j] = tok.decode(tok.convert_tokens_to_ids(r.hypotheses[0]))
+        return out
+    except Exception:
+        return texts
+
 MAX_RETRIES = 3
 
 
@@ -105,7 +169,16 @@ def ask(state: dict, questions: dict, timeout: float = 20,
 
 def _ask_laya(state: dict, questions: dict, model: str | None, timeout: float) -> dict:
     """本地 Laya 的 /v1/systemone（laya.serve），协议与 TypeSafe 相同但走本机、免密钥。
-    地址用 LAYA_URL 覆盖，默认 http://127.0.0.1:8199。"""
+    地址用 LAYA_URL 覆盖，默认 http://127.0.0.1:8199。
+    中文消息先机翻成英文再发（Laya 英文判断远强于中文）；翻译不可用时原样直发。"""
+    import copy
+    state = copy.deepcopy(state)
+    msgs = state.get("chat", {}).get("messages") or []
+    texts = [m.get("text", "") for m in msgs]
+    en = _zh2en(texts)
+    for m, t in zip(msgs, en):
+        if t:
+            m["text"] = t
     url = (os.environ.get("LAYA_URL") or "http://127.0.0.1:8199").rstrip("/") + "/v1/systemone"
     payload = json.dumps({"model": model, "state": state, "questions": questions},
                          ensure_ascii=False).encode("utf-8")
