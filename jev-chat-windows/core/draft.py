@@ -56,6 +56,13 @@ SYSTEM = (
 )
 
 
+def _unwrap(x):
+    """模型偶尔把候选包成 {"text": ...} 对象——解出来。"""
+    if isinstance(x, dict):
+        return str(x.get("text") or x.get("content") or x.get("message") or "")
+    return str(x)
+
+
 def _clean(x: str) -> str:
     """剥掉一条候选两端的括号/引号/编号/逗号——模型偶尔一行给一个 ["…"]，或者整条带引号。
     末尾的句号也去掉（微信里很少有人用句号收尾）；？！～ 照留，那是语气。"""
@@ -74,7 +81,7 @@ def _parse_candidates(content: str) -> list[str]:
     try:
         arr = json.loads(content)
         if isinstance(arr, list):
-            got = [_clean(str(x)) for x in arr]
+            got = [_clean(_unwrap(x)) for x in arr]
             got = [g for g in got if g]
             if got:
                 return got[:3]

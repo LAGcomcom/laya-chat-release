@@ -400,6 +400,12 @@ class Overlay:
         self.chatFollow.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
         chat_row.addWidget(self.chatFollow)
         body.addLayout(chat_row)
+        rel_row = QHBoxLayout()
+        rel_row.setSpacing(8)
+        rel_row.addWidget(self.relLabel)
+        rel_row.addWidget(self.relBox, 1)
+        rel_row.addWidget(self.proactiveBtn)
+        body.addLayout(rel_row)
         self.targetRow = QWidget()  # 只有开了「群聊指定回复对象」且这个会话是群聊才露出来
         target_row = QHBoxLayout(self.targetRow)
         target_row.setContentsMargins(0, 0, 0, 0)

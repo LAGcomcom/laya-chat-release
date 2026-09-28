@@ -32,7 +32,7 @@ def proactive_candidates(messages_recent: list, relationship: str,
     hour = time.localtime().tm_hour
     daypart = ("早上" if 5 <= hour < 11 else "中午" if 11 <= hour < 14 else
                "下午" if 14 <= hour < 18 else "晚上")
-    transcript = "\n".join(f"{w}: {t}" for w, t in messages_recent[-6:]) or "（最近没聊什么）"
+    transcript = "\n".join(f"{m[0]}: {m[1]}" for m in messages_recent[-6:]) or "（最近没聊什么）"
 
     user = (f"relationship: {relationship}\n现在是{daypart} {now}。\n"
             f"你们最近聊过的（供参考，别重复原话）：\n{transcript}\n")

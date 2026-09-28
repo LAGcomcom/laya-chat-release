@@ -145,6 +145,18 @@ def llm_key() -> str:
 def has_llm_key() -> bool:
     return bool(llm_key())
 
+def style_prompt() -> str:
+    """全局说话人格注入（每次起草都带上）。"""
+    return str(_read("style_prompt", ""))
+
+def target_contact() -> str:
+    """专属模式：只分析和这个会话的聊天；空 = 通用模式。"""
+    return str(_read("target_contact", ""))
+
+def save_chat_log() -> bool:
+    """聊天数据沉淀开关（默认关）：OCR 读到的消息按天落 JSONL，供以后微调。"""
+    return bool(_read("save_chat_log", False))
+
 def has_key() -> bool:
     """判断来源选了本地 Laya 时不校验任何 key，直接算已配置。"""
     if jev_provider() == "laya":
